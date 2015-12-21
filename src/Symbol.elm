@@ -1,4 +1,4 @@
-module Symbol where
+module Symbol (Symbol(..)) where
 
 type Symbol
   = Cross

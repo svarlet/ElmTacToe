@@ -1,21 +1,29 @@
-module Cell where
+module Cell (Cell, render) where
 
-import Symbol exposing (..)
+import Symbol exposing (Symbol(..))
 import Html exposing (..)
+import Signal exposing (Address)
+import Html.Events exposing (..)
 
 type alias Cell
   = Maybe Symbol
 
-render : Cell -> Html
-render cell =
+render : Cell -> Attribute -> Html
+render cell clickHandler =
   case cell of
     Nothing ->
-      td [] [text "_"]
+      td
+        [ clickHandler ]
+        [ ]
 
     Just Circle ->
-      td [] [text "O"]
+      td
+        [ clickHandler ]
+        [ text "O" ]
 
     Just Cross ->
-      td [] [text "X"]
+      td
+        [ clickHandler ]
+        [ text "X" ]
 
 

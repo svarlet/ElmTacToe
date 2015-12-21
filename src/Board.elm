@@ -1,41 +1,128 @@
-module Board where
+module Board (Board,
+              Status(..),
+              new,
+              take,
+              boardStatus,
+              render
+             ) where
 
 import Array exposing (Array)
-import Matrix exposing (Matrix, map, repeat, getRow)
-import Html exposing (..)
+import Matrix exposing (Matrix, repeat, getRow, getColumn)
+import Html exposing (Html, Attribute, table, tr)
+import Html.Events exposing (onClick)
+import List exposing ((::), head, tail)
+import Signal exposing (Address)
 
-import Symbol exposing (..)
-import Cell exposing (..)
+import Symbol exposing (Symbol(..))
+import Cell exposing (Cell, render)
 
-type alias Cell
-  = Maybe Symbol
+type alias Board =
+  Matrix Cell
 
-type alias Board
-  = Matrix Cell
+type Status
+  = Win Symbol
+  | Lost
+  | Playable
 
 new : Board
 new =
-  repeat 9 9 Nothing
+  repeat 3 3 Nothing
 
-take : (Int, Int) -> Symbol -> Board -> Board
-take (x,y) symbol board =
+take : Int -> Int -> Symbol -> Board -> Board
+take rowIndex colIndex symbol board =
+  Matrix.set rowIndex colIndex (Just symbol) board
+
+lineStatus : List Cell -> Status
+lineStatus cells =
+  if onlyOf (Just Cross) cells then
+    Win Cross
+  else if onlyOf (Just Circle) cells then
+    Win Circle
+  else if 2 <= List.length (List.filter ((==) Nothing) cells) then
+    Playable
+  else
+    Lost
+
+onlyOf : Cell -> List Cell -> Bool
+onlyOf cellValue cells =
+  List.all ((==) cellValue) cells
+
+boardStatus : Board -> Status
+boardStatus board =
+  [ getRow 0 board,
+    getRow 1 board,
+    getRow 2 board,
+    getColumn 0 board,
+    getColumn 1 board,
+    getColumn 2 board,
+    getDiagonalStartingAt 0 0 board,
+    getDiagonalStartingAt 0 2 board
+  ]
+  |> List.filterMap identity
+  |> List.map Array.toList
+  |> boardStatusFromLines
+
+getDiagonalStartingAt : Int -> Int -> Board -> Maybe (Array Cell)
+getDiagonalStartingAt x y board =
+  case (x,y) of
+    (0,0) ->
+      Just <| Array.initialize 3 (\i -> Maybe.withDefault Nothing <| Matrix.get i i board)
+
+    (0, 2) ->
+      Just <| Array.initialize 3 (\i -> Maybe.withDefault Nothing <| Matrix.get i (2 - i) board)
+
+    (2, 0) ->
+      Just <| Array.initialize 3 (\i -> Maybe.withDefault Nothing <| Matrix.get (2 - i) i board)
+
+    (2, 2) ->
+      Just <| Array.initialize 3 (\i -> Maybe.withDefault Nothing <| Matrix.get (2 - i) (2 - i) board)
+
+    _ ->
+      Nothing
+
+boardStatusFromLines : List (List Cell) -> Status
+boardStatusFromLines lines =
+  let
+    initialStats = { playable = 0, lost = 0, win = Playable }
+    statsUpdater = \line stats ->
+                     case lineStatus line of
+                       Win symbol ->
+                         { stats | win = Win symbol }
+
+                       Playable ->
+                         { stats | playable = stats.playable + 1 }
+
+                       Lost ->
+                         { stats | lost = stats.lost + 1 }
+    stats = List.foldl statsUpdater initialStats lines
+  in
+    case stats.win of
+      Win symbol ->
+        Win symbol
+
+      _ ->
+        case stats.playable of
+          0 ->
+            Lost
+
+          _ ->
+            Playable
+
+render : (Int -> Int -> Attribute) -> Board -> Html
+render clickHandler board =
   board
-
-tableRows : Matrix Html -> List Html
-tableRows board =
-  [0..8]
-  |> List.map (\i -> getRow i board)
-  |> List.map (\arr -> case arr of
-                         Nothing ->
-                           tr [] []
-
-                         Just arr ->
-                           tr [] (Array.toList arr)
-              )
-
-render : Board -> Html
-render board =
-  board
-    |> map Cell.render
-    |> tableRows
+    |> Matrix.indexedMap (cellRenderer clickHandler)
+    |> rows
+    |> List.map (tr [])
     |> table []
+
+cellRenderer : (Int -> Int -> Attribute) -> Int -> Int -> Cell -> Html
+cellRenderer clickHandler x y c =
+  clickHandler x y
+    |> Cell.render c
+
+rows : Matrix Html -> List (List Html)
+rows matrix =
+  List.map (\i -> getRow i matrix) [0..2]
+  |> List.filterMap identity
+  |> List.map Array.toList
